@@ -66,7 +66,7 @@ Visit `http://localhost:5000/unsafe_query?search=anything' OR '1'='1' --` or som
 - [x] 拼接
 - [x] 切除
 - [x] **模拟SQL注入攻击**
-- [ ] More functions？
+- [ ] More functions？如计算两个基因序列的相似度
 - [ ] More attacks？
 - [ ] 考虑查询时是否要遵循人性化设置将index + 1
 - [ ] 考虑切除时是否要遵循人性化设置将start - 1，end + 1
