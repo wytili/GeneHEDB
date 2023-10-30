@@ -1,0 +1,4 @@
+Flask==1.1.2
+Flask_Cors==4.0.0
+numpy==1.21.5
+tenseal==0.3.14
