@@ -19,6 +19,7 @@ const App = () => {
   const [decryptedData, setDecryptedData] = useState("");
   const [deleteId, setDeleteId] = useState("");
   const [updateId, setUpdateId] = useState("");
+  const [cutId, setCutId] = useState("");
   const [allData, setAllData] = useState([]);
   const [stats, setStats] = useState({ total_count: 0, latest_data: "" });
   const [queryGeneId, setQueryGeneId] = useState('');
@@ -55,6 +56,7 @@ const App = () => {
     } catch (error) {
       message.error("加密失败: " + error.message);
     }
+    setData("");
   };
   
   const handleDecrypt = async (id) => {
@@ -65,6 +67,7 @@ const App = () => {
     } catch (error) {
       message.error("解密失败: " + error.message);
     }
+    setQueryGeneId("");
   };
 
   const handleDelete = async () => {
@@ -79,13 +82,14 @@ const App = () => {
     } catch (error) {
       message.error("删除失败: " + error.message);
     }
+    setDeleteId("");
   };
 
   const handleUpdate = async () => {
     try {
       const mutationData = {
         mutation_data: {
-          index: parseInt(mutateGeneId),
+          index: parseInt(mutateGeneId)-1,
           new_base: newGeneSequence
         }
       };
@@ -95,6 +99,9 @@ const App = () => {
     } catch (error) {
       message.error("更新失败: " + error.message);
     }
+    setUpdateId("");
+    setMutateGeneId("");
+    setNewGeneSequence("");
   };
 
   const handleGetAll = async () => {
@@ -114,7 +121,8 @@ const App = () => {
   const handleCompute = async () => {
     try {
       const frequency = await api.computeBaseFrequency(baseType);
-      message.success(`碱基${baseType}的出现次数是 ${frequency.frequency}`);
+      const percentage = await api.computeBasePercentage(baseType);
+      message.success(`碱基${baseType}的出现次数是 ${frequency.frequency}，出现频率是 ${percentage.percentage}%`);
     } catch (error) {
       message.error("计算碱基频率失败: " + error.message);
     }
@@ -128,20 +136,25 @@ const App = () => {
     } catch (error) {
       message.error("基因序列拼接失败: " + error.message);
     }
+    setFirstGene("");
+    setSecondGene("");
   };
 
   const handleCutGene = async () => {
     try {
       const subSequence = {
-          start: parseInt(startCut),
+          start: parseInt(startCut)-1,
           end: parseInt(endCut)
         }
-      await api.deleteSubsequence(updateId, subSequence);
+      await api.deleteSubsequence(cutId, subSequence);
     message.success("基因序列已切除");
     api.getStats().then(setStats);
     } catch (error) {
       message.error("基因序列切除失败: " + error.message);
     }
+    setCutId("");
+    setStartCut("");
+    setEndCut("");
   };
 
   return (
@@ -163,43 +176,54 @@ const App = () => {
 
   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: '20px' }}> 
 
-      {/* 统计数据 */}
-      <Card style={CardStyle} title="统计数据" id="stats">
-            <Row gutter={16}>
-              <Col span={12}>
-                <Statistic title="基因序列总数" value={stats.total_count} />
-              </Col>
-              <Col span={12}>
-                <Statistic title="最新基因序列" value={stats.latest_data} />
-              </Col>
-            </Row>
+    <Row>
+        <Col span={12}>
+          {/* 查询所有基因序列 */}
+          <Card style={CardStyle} title="查询所有基因序列" id="allGenes">
+              <Button onClick={handleGetAll}>
+                查询所有
+              </Button>
+              <Table dataSource={allData} columns={columns} pagination={{ pageSize: 20 }} style={{ marginTop: '20px' }} />
           </Card>
-          
-      {/* 增加基因序列 */}
-      <Card style={CardStyle} title="增加基因序列" id="addGene">
-          <Input
-            placeholder="输入基因序列（由A/T/G/C构成的字符串）"
-            value={data}
-            onChange={e => setData(e.target.value)}
-            style={{ marginBottom: '10px' }}
-          />
-          <Button onClick={handleEncrypt}>
-            添加基因序列
-          </Button>
-      </Card>
+        </Col>
 
-      {/* 删除基因序列 */}
-      <Card style={CardStyle} title="删除基因序列" id="deleteGene">
-          <Input
-            placeholder="输入要删除的基因序列ID"
-            value={deleteId}
-            onChange={e => setDeleteId(e.target.value)}
-            style={{ marginBottom: '10px' }}
-          />
-          <Button onClick={handleDelete}>
-            删除基因序列
-          </Button>
-      </Card>
+        <Col span={12}>
+          {/* 统计数据 */}
+          <Card style={CardStyle} title="统计数据" id="stats">
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Statistic title="基因序列总数" value={stats.total_count} />
+                </Col>
+                <Col span={12}>
+                  <Statistic title="最新基因序列" value={stats.latest_data} />
+                </Col>
+              </Row>
+            </Card>
+          {/* 增加基因序列 */}
+          <Card style={CardStyle} title="增加基因序列" id="addGene">
+              <Input
+                placeholder="输入基因序列（由A/T/G/C构成的字符串）"
+                value={data}
+                onChange={e => setData(e.target.value)}
+                style={{ marginBottom: '10px' }}
+              />
+              <Button onClick={handleEncrypt}>
+                添加基因序列
+              </Button>
+          </Card>
+
+          {/* 删除基因序列 */}
+          <Card style={CardStyle} title="删除基因序列" id="deleteGene">
+              <Input
+                placeholder="输入要删除的基因序列ID"
+                value={deleteId}
+                onChange={e => setDeleteId(e.target.value)}
+                style={{ marginBottom: '10px' }}
+              />
+              <Button onClick={handleDelete}>
+                删除基因序列
+              </Button>
+          </Card>
 
           {/* 查询某个基因序列 */}
           <Card style={CardStyle} title="查询某个基因序列" id="queryGene">
@@ -215,13 +239,7 @@ const App = () => {
               </Button>
           </Card>
 
-          {/* 查询所有基因序列 */}
-          <Card style={CardStyle} title="查询所有基因序列" id="allGenes">
-              <Button onClick={handleGetAll}>
-                查询所有
-              </Button>
-              <Table dataSource={allData} columns={columns} pagination={{ pageSize: 5 }} style={{ marginTop: '20px' }} />
-          </Card>
+          
 
           {/* 修改某个基因数据 */}
           <Card style={CardStyle} title="修改某个基因数据" id="mutateGene">
@@ -232,13 +250,13 @@ const App = () => {
                 style={{ marginBottom: '10px' }}
               />
               <Input
-                placeholder="输入变异的碱基位置（index从0开始）"
+                placeholder="输入变异的碱基位置（index从1开始）"
                 value={mutateGeneId}
                 onChange={e => setMutateGeneId(e.target.value)}
                 style={{ marginBottom: '10px' }}
               />
               <Input
-                placeholder="输入新的基因序列"
+                placeholder="输入变异的碱基数据"
                 value={newGeneSequence}
                 onChange={e => setNewGeneSequence(e.target.value)}
                 style={{ marginBottom: '10px' }}
@@ -284,18 +302,18 @@ const App = () => {
           <Card style={CardStyle} title="基因序列切除" id="cutGene">
               <Input
                 placeholder="输入需要切除的基因序列id"
-                value={updateId}
-                onChange={e => setUpdateId(e.target.value)}
+                value={cutId}
+                onChange={e => setCutId(e.target.value)}
                 style={{ marginBottom: '10px' }}
               />
               <Input
-                placeholder="输入起始位置（index从0开始）"
+                placeholder="输入起始位置（index从1开始）"
                 value={startCut}
                 onChange={e => setStartCut(e.target.value)}
                 style={{ marginBottom: '10px' }}
               />
               <Input
-                placeholder="输入结束位置（要切除的最后一个碱基的index + 1）"
+                placeholder="输入结束位置（要切除的最后一个碱基的index）"
                 value={endCut}
                 onChange={e => setEndCut(e.target.value)}
                 style={{ marginBottom: '10px' }}
@@ -304,6 +322,12 @@ const App = () => {
                 切除
               </Button>
           </Card>
+        </Col>
+    </Row>
+
+      
+          
+      
 
           </div>
         </div>

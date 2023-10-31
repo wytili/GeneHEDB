@@ -63,7 +63,7 @@ export const mutateGeneSequence = async (id, mutationData) => {
 };
 
 
-// 计算碱基频率
+// 计算碱基出现次数
 export const computeBaseFrequency = async (baseType) => {
   const response = await fetch(`${API_URL}/compute_frequency`, {
     method: 'POST',
@@ -75,6 +75,20 @@ export const computeBaseFrequency = async (baseType) => {
 
   return await response.json();
 };
+
+// 计算碱基频率
+export const computeBasePercentage = async (baseType) => {
+  const response = await fetch(`${API_URL}/compute_percentage`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ target_base: baseType }),
+  });
+
+  return await response.json();
+};
+
 
 // 拼接基因序列
 export const concatenateGeneSequences = async (id1, id2) => {
