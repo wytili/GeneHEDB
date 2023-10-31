@@ -4,6 +4,7 @@ from db import init_db, insert_data, fetch_data, fetch_all_data, get_data_count,
     delete_data, unsafe_query
 from flask_cors import CORS
 import numpy as np
+import random
 
 app = Flask(__name__)
 CORS(app)  # 为所有路由启用跨域
@@ -21,8 +22,23 @@ context = ts.context(
 context.global_scale = 2 ** 40
 context.generate_galois_keys()
 
-# 数据库初始化
-init_db()
+init_db()  # 初始化数据库
+
+# 数据库初始化随机生成序列
+def add_gene_sequence_init(gene_sequence):
+        # 使用某种映射方法将ATGC转换为数值，例如：A=0, T=1, G=2, C=3
+        mapped_sequence = [mapping[gene] for gene in gene_sequence]
+        # 数据加密
+        encrypted_vector = ts.ckks_vector(context, mapped_sequence)
+
+        # 存储加密数据
+        insert_data(encrypted_vector.serialize())
+
+# 在数据库中添加随机生成的基因序列
+for _ in range(20):
+    random_sequence = ''.join(random.choice('ATCG') for _ in range(8))
+    add_gene_sequence_init(random_sequence)     
+ 
 
 
 # 增：添加一段新的基因序列
@@ -146,6 +162,42 @@ def compute_base_frequency():
     return jsonify({"status": "success", "frequency": frequency, "target_base": target_base}), 200
 
 
+# 算：统计某个碱基（A、T、G、C）在所有序列中出现的概率
+@app.route('/compute_percentage', methods=['POST'])
+def compute_base_percentage():
+    target_base = request.json["target_base"]  # 'A', 'T', 'G', 'C'
+    target_value = mapping[target_base]
+
+    all_encrypted_sequences = fetch_all_data()
+    total_bases = 0  # 用于计算总碱基数
+    target_count = 0  # 用于计算目标碱基的数量
+
+    for encrypted_data in all_encrypted_sequences:
+        # Check if 'encrypted' key exists in the dictionary
+        if isinstance(encrypted_data, dict) and 'encrypted' in encrypted_data:
+            try:
+                encrypted_vector = ts.ckks_vector_from(context, encrypted_data['encrypted'])
+            except Exception as e:
+                print(f"Skipping an item due to exception: {e}")
+                continue
+        else:
+            print(f"Skipping an item due to unexpected type or structure: {encrypted_data}")
+            continue
+
+        decrypted_vector = encrypted_vector.decrypt()
+        # Round the float numbers to integers
+        rounded_vector = np.round(decrypted_vector).astype(int)
+        # Count occurrences of target_value
+        target_count += np.count_nonzero(rounded_vector == target_value)
+        total_bases += len(rounded_vector)
+
+    # 计算目标碱基出现的概率百分比
+    percentage = (target_count / total_bases) * 100
+
+    return jsonify({"status": "success", "percentage": percentage, "target_base": target_base}), 200
+
+
+
 # 基因序列拼接
 @app.route('/concatenate/<int:id1>/<int:id2>', methods=['POST'])
 def concatenate_gene_sequences(id1, id2):
@@ -218,5 +270,12 @@ def sql_attack():
         return jsonify({"error": str(e)}), 500
 
 
+
+
+
+
 if __name__ == '__main__':
     app.run(debug=True)
+    
+    
+   
