@@ -301,7 +301,7 @@ const App = () => {
           {/* 基因序列切除 */}
           <Card style={CardStyle} title="基因序列切除" id="cutGene">
               <Input
-                placeholder="输入需要切除的基因序列id"
+                placeholder="输入需要切除的基因序列ID"
                 value={cutId}
                 onChange={e => setCutId(e.target.value)}
                 style={{ marginBottom: '10px' }}
