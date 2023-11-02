@@ -120,3 +120,21 @@ export const getStats = async () => {
 
   return await response.json();
 };
+
+
+// 查找与给定基因序列相似的基因序列
+export const findSimilarGeneSequences = async (sequence) => {
+  const response = await fetch(`${API_URL}/fuzzy_search`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ gene_sequence: sequence }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to find similar gene sequences for the provided sequence`);
+  }
+
+  return await response.json();
+};

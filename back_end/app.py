@@ -5,6 +5,8 @@ from db import init_db, insert_data, fetch_data, fetch_all_data, get_data_count,
 from flask_cors import CORS
 import numpy as np
 import random
+from Bio import pairwise2
+from Bio.pairwise2 import format_alignment
 
 app = Flask(__name__)
 CORS(app)  # 为所有路由启用跨域
@@ -24,21 +26,22 @@ context.generate_galois_keys()
 
 init_db()  # 初始化数据库
 
+
 # 数据库初始化随机生成序列
 def add_gene_sequence_init(gene_sequence):
-        # 使用某种映射方法将ATGC转换为数值，例如：A=0, T=1, G=2, C=3
-        mapped_sequence = [mapping[gene] for gene in gene_sequence]
-        # 数据加密
-        encrypted_vector = ts.ckks_vector(context, mapped_sequence)
+    # 使用某种映射方法将ATGC转换为数值，例如：A=0, T=1, G=2, C=3
+    mapped_sequence = [mapping[gene] for gene in gene_sequence]
+    # 数据加密
+    encrypted_vector = ts.ckks_vector(context, mapped_sequence)
 
-        # 存储加密数据
-        insert_data(encrypted_vector.serialize())
+    # 存储加密数据
+    insert_data(encrypted_vector.serialize())
+
 
 # 在数据库中添加随机生成的基因序列
 for _ in range(20):
     random_sequence = ''.join(random.choice('ATCG') for _ in range(8))
-    add_gene_sequence_init(random_sequence)     
- 
+    add_gene_sequence_init(random_sequence)
 
 
 # 增：添加一段新的基因序列
@@ -197,7 +200,6 @@ def compute_base_percentage():
     return jsonify({"status": "success", "percentage": percentage, "target_base": target_base}), 200
 
 
-
 # 基因序列拼接
 @app.route('/concatenate/<int:id1>/<int:id2>', methods=['POST'])
 def concatenate_gene_sequences(id1, id2):
@@ -258,6 +260,43 @@ def get_stats():
         return jsonify({"error": str(e)}), 500
 
 
+# 计算序列相似度 - 局部比对
+def sequence_similarity(seq1, seq2):
+    alignments = pairwise2.align.localxx(seq1, seq2)
+    # 选择得分最高的对齐方式
+    top_alignment = max(alignments, key=lambda x: x.score)
+    # 计算相似度比例
+    similarity = top_alignment.score / min(len(seq1), len(seq2))
+    return similarity
+
+
+# 模糊查找路由
+@app.route('/fuzzy_search', methods=['POST'])
+def fuzzy_search():
+    input_sequence = request.json['gene_sequence']
+    all_encrypted_sequences = fetch_all_data()
+
+    results = []
+
+    for item in all_encrypted_sequences:
+        if 'encrypted' in item and 'id' in item:
+            encrypted_vector = ts.ckks_vector_from(context, item['encrypted'])
+            decrypted_vector = encrypted_vector.decrypt()
+            gene_sequence = ''.join([reverse_mapping[int(round(x))] for x in decrypted_vector])
+
+            similarity = sequence_similarity(input_sequence, gene_sequence)
+            results.append({
+                "id": item['id'],
+                "sequence": gene_sequence,
+                "similarity": similarity
+            })
+
+    # 根据相似度对结果进行排序，并选择相似度最高的五个
+    results = sorted(results, key=lambda x: x['similarity'], reverse=True)[:5]
+
+    return jsonify(results), 200
+
+
 # 不安全的查询：用于演示SQL注入
 @app.route('/unsafe_query', methods=['GET'])
 def sql_attack():
@@ -270,12 +309,5 @@ def sql_attack():
         return jsonify({"error": str(e)}), 500
 
 
-
-
-
-
 if __name__ == '__main__':
     app.run(debug=True)
-    
-    
-   
