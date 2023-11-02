@@ -5,17 +5,16 @@ from db import init_db, insert_data, fetch_data, fetch_all_data, get_data_count,
 from flask_cors import CORS
 import numpy as np
 import random
-from Bio import pairwise2
-from Bio.pairwise2 import format_alignment
+from Bio import Align
 
 app = Flask(__name__)
-CORS(app)  # 为所有路由启用跨域
+CORS(app)  # 为所有接口启用跨域
 
-# 基因序列正反映射， 便于操作
+# 基因序列碱基与数字的正反映射，便于操作
 mapping = {'A': 0, 'T': 1, 'G': 2, 'C': 3}
 reverse_mapping = {0: 'A', 1: 'T', 2: 'G', 3: 'C'}
 
-# 同态加密上下文初始化
+# 同态加密参数初始化
 context = ts.context(
     ts.SCHEME_TYPE.CKKS,
     poly_modulus_degree=8192,
@@ -24,12 +23,11 @@ context = ts.context(
 context.global_scale = 2 ** 40
 context.generate_galois_keys()
 
-init_db()  # 初始化数据库
+init_db()
 
 
 # 数据库初始化随机生成序列
 def add_gene_sequence_init(gene_sequence):
-    # 使用某种映射方法将ATGC转换为数值，例如：A=0, T=1, G=2, C=3
     mapped_sequence = [mapping[gene] for gene in gene_sequence]
     # 数据加密
     encrypted_vector = ts.ckks_vector(context, mapped_sequence)
@@ -48,14 +46,11 @@ for _ in range(20):
 @app.route('/encrypt', methods=['POST'])
 def add_gene_sequence():
     gene_sequence = request.json['gene_sequence']
-
-    # 使用某种映射方法将ATGC转换为数值，例如：A=0, T=1, G=2, C=3
     mapped_sequence = [mapping[gene] for gene in gene_sequence]
 
     # 数据加密
     encrypted_vector = ts.ckks_vector(context, mapped_sequence)
 
-    # 存储加密数据
     insert_data(encrypted_vector.serialize())
     return jsonify({"status": "success", "message": "Gene sequence added"}), 200
 
@@ -93,7 +88,7 @@ def get_all_gene_sequences():
     try:
         decrypted_sequences = []
         for item in all_encrypted_sequences:
-            # Check if 'encrypted' key exists in the dictionary
+            # 查看字典中是否存在encrypted键
             if 'encrypted' in item:
                 try:
                     encrypted_vector = ts.ckks_vector_from(context, item['encrypted'])
@@ -145,7 +140,7 @@ def compute_base_frequency():
     frequency = 0
 
     for encrypted_data in all_encrypted_sequences:
-        # Check if 'encrypted' key exists in the dictionary
+        # 查看字典中是否存在encrypted键
         if isinstance(encrypted_data, dict) and 'encrypted' in encrypted_data:
             try:
                 encrypted_vector = ts.ckks_vector_from(context, encrypted_data['encrypted'])
@@ -157,9 +152,9 @@ def compute_base_frequency():
             continue
 
         decrypted_vector = encrypted_vector.decrypt()
-        # Round the float numbers to integers
+        # 转换为整数
         rounded_vector = np.round(decrypted_vector).astype(int)
-        # Count occurrences of target_value
+        # 计算目标碱基出现的次数
         frequency += np.count_nonzero(rounded_vector == target_value)
 
     return jsonify({"status": "success", "frequency": frequency, "target_base": target_base}), 200
@@ -176,7 +171,7 @@ def compute_base_percentage():
     target_count = 0  # 用于计算目标碱基的数量
 
     for encrypted_data in all_encrypted_sequences:
-        # Check if 'encrypted' key exists in the dictionary
+        # 查看字典中是否存在encrypted键
         if isinstance(encrypted_data, dict) and 'encrypted' in encrypted_data:
             try:
                 encrypted_vector = ts.ckks_vector_from(context, encrypted_data['encrypted'])
@@ -188,9 +183,9 @@ def compute_base_percentage():
             continue
 
         decrypted_vector = encrypted_vector.decrypt()
-        # Round the float numbers to integers
+        # 转换为整数
         rounded_vector = np.round(decrypted_vector).astype(int)
-        # Count occurrences of target_value
+        # 计算目标碱基出现的次数
         target_count += np.count_nonzero(rounded_vector == target_value)
         total_bases += len(rounded_vector)
 
@@ -261,8 +256,21 @@ def get_stats():
 
 
 # 计算序列相似度 - 局部比对
+# 此处函数的修改只是因为旧的Bio.pairwise2模块已经被弃用，所以改为Bio.Align.PairwiseAligner来重写
 def sequence_similarity(seq1, seq2):
-    alignments = pairwise2.align.localxx(seq1, seq2)
+    # 创建 PairwiseAligner 对象
+    aligner = Align.PairwiseAligner()
+    # 设置对齐方法为 local
+    aligner.mode = 'local'
+    # 设置得分规则：匹配得分为1，不匹配和空位得分为0
+    aligner.match_score = 1
+    aligner.mismatch_score = 0
+    aligner.open_gap_score = 0
+    aligner.extend_gap_score = 0
+
+    # 进行序列对齐
+    alignments = aligner.align(seq1, seq2)
+
     # 选择得分最高的对齐方式
     top_alignment = max(alignments, key=lambda x: x.score)
     # 计算相似度比例
@@ -270,7 +278,7 @@ def sequence_similarity(seq1, seq2):
     return similarity
 
 
-# 模糊查找路由
+# 查找相似基因序列
 @app.route('/fuzzy_search', methods=['POST'])
 def fuzzy_search():
     input_sequence = request.json['gene_sequence']
@@ -291,19 +299,19 @@ def fuzzy_search():
                 "similarity": similarity
             })
 
-    # 根据相似度对结果进行排序，并选择相似度最高的五个
+    # 根据相似度对结果进行排序，并显示相似度最高的五个
     results = sorted(results, key=lambda x: x['similarity'], reverse=True)[:5]
 
     return jsonify(results), 200
 
 
-# 不安全的查询：用于演示SQL注入
+# 不安全的查询：用于演示SQL注入攻击
 @app.route('/unsafe_query', methods=['GET'])
 def sql_attack():
     try:
         search_term = request.args.get('search')
         encrypted_data = unsafe_query(search_term)
-        simplified_data = [str(item)[:2000] + "..." for item in encrypted_data]  # 只显示前2000个字符和省略号
+        simplified_data = [str(item)[:1000] + "..." for item in encrypted_data]  # 只显示前1000个字符和省略号
         return jsonify({"status": "success", "data": simplified_data}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
